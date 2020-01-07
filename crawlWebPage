@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Aug 20 18:15:33 2019
+
+@author: helenawang
+"""
+
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+@author: helenawang
+"""
+
+from collections import deque
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import urllib.error
+import urllib.request
+import igraph
+
+# Create dictionary to determine if the page related to the topic 
+d = {"Hawaii":              ["capital", "city", "island", "climate", "weather", "held by", 
+                             "departure", "arriving from", "located in", "university", 
+                             "history", "Hawaiian", "transportation", "event", "attractions"],
+    "Apple":                ["origin", "fruit", "red", "green", "golden", "sweet", "bittersweet", 
+                             "acid", "cake", "cider", "juice", "pie", "appleseed", "tree", 
+                             "picking", "disease", "production", "cultivars","shape", "lavor"],
+    "William Shakespeare":  ["poet", "playwright", "actor", "plays", "poems", 
+                             "son of William Shakespeare", "daughter of William Shakespeare",  
+                             "homeland", "life", "collaborations", "wife of William Shakespeare",
+                             "portraits", "sexuality", "religious",  "memorials",]}
+# Create an array to save the topic
+t = ["Hawaii", "apple", "William Shakespeare" ]
+# Create an array to avoid some kinds of webpages 
+words = ["File", "Special", "Category", "Template", "Talk", "Route", "cite", "#"]
+
+# Use igraph to save a graph file
+g = igraph.Graph()
+# Create a queue which instore the url
+queue = deque([])
+# to make sure that if the web page has been visited or not
+visited_list = set()
+# Create a rate dictionary to rate each web page
+r = {}
+# Create a node list to store the node
+nodes = []
+# Create a edge pair list to store the edge
+edges = []
+# Create a weights list to store the weight
+weights = []
+
+# Crawl the page and populate the queue with newly found URLs  
+def crawl(beginner):     
+    beginner_name = beginner.rsplit('/',1)[-1]
+#    g.add_vertices(beginner_name)
+    nodes.append(beginner_name)
+    queue.append(beginner) 
+    count = 0
+    url_count = 0
+    f = open("url_downloaded", "a")
+    f.write(beginner + "\n")
+    f.close()
+    while len(queue) > 0:
+        url = queue.pop()   
+        if url not in visited_list:   
+            visited_list.add(url)
+            count += 1
+            print("the number of related url: ", count)
+            print(url)
+            urlf = urllib.request.urlopen(url)
+            soup = BeautifulSoup(urlf.read())
+            urls = soup.find_all("a")
+            for each in urls:
+                # Complete relative URLs and strip trailing slash               
+                try:
+                    complete_url = urljoin(url, each["href"]).rstrip('/') 
+                    url_count += 1
+                    print("the number of url: ", url_count)
+                    # Make sure each web page are english 
+                    string = "en.wikipedia.org/wiki" 
+                    result = any((True if subStr in complete_url else False for subStr in words))          
+                    if string in complete_url and not result:
+                    # Check if the web page is related to the topic 
+                        urlf_com = urllib.request.urlopen(complete_url)
+                        soup_each = BeautifulSoup(urlf_com.read())
+    #                   data_1 = soup_each.find(string=d["Hawaii"])
+    #                    data_1 = soup_each.find(string=d["Apple"])
+                        data_1 = soup_each.find(string=d["William Shakespeare"])
+                        data_2 = soup_each.find(string=t[2])
+                        if data_2 is not None and data_1 is not None:
+                            if len(data_2) > 0 and len(data_1) > 0:
+                                url_name = url.rsplit('/',1)[-1]
+                                comp_name = complete_url.rsplit('/',1)[-1] 
+                                pair = (url_name, comp_name)
+                                # Check if the new URL already exists in the queue
+                                # Check if the new URL already exists in the visited_list 
+                                if complete_url != url and complete_url not in queue and complete_url not in visited_list:
+                                    rate = len(data_1) + len(data_2)
+                                    r[complete_url] = rate
+                                    queue.append(complete_url)
+                                    print("the amount of queue: ", len(queue))
+                                    f = open("url_downloaded", "a")
+                                    f.write(complete_url + "\n")
+                                    f.close()                                           
+                                    nodes.append(comp_name)
+                                    edges.append(pair)
+                                    weights.append(1)
+                                else:
+                                    if pair in edges:
+                                        weights[edges.index(pair)] += 1
+                except:
+                    print()
+    g.add_vertices(nodes)
+    g.add_edges(edges) 
+    g.es["weight"] = weights              
+    g.write_graphml('graph.GraphML')
+    f = open("rate.txt", "w")
+    f.write(str(r))
+    f.close()                    
+                                
+def main():
+    # Beginning from wikipedia url
+#    beginner = 'https://en.wikipedia.org/wiki/Hawaii'
+    beginner = 'https://en.wikipedia.org/wiki/William_Shakespeare'
+#    beginner = 'https://en.wikipedia.org/wiki/Apple'
+    # crawl pages
+    crawl(beginner)
+  
+if __name__ == "__main__":
+    main()
